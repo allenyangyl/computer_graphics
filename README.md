@@ -8,7 +8,4 @@ assignment 3: PathTracer
 assignment 4: 
 
 compile: 
-mkdir build && cd build
-cmake ../src
-make
-make install
+mkdir build && cd build && cmake ../src && make && make install
