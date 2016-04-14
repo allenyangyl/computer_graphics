@@ -1,0 +1,773 @@
+/*
+ * Student solution for CMU 15-462 Project 2 (MeshEdit)
+ *
+ * Implemented by ____ on ____.
+ *
+ */
+
+#include "student_code.h"
+#include "mutablePriorityQueue.h"
+
+namespace CMU462
+{
+ //====================================================== splitEdge ================================================
+   VertexIter HalfedgeMesh::splitEdge( EdgeIter e0 )
+   {
+      // TODO This method should split the given edge and return an iterator to the newly inserted vertex.
+      // TODO The halfedge of this vertex should point along the edge that was split, rather than the new edges.
+      // Sketch of the flow: http://f.cl.ly/items/3z1U0O2c251D3w2S1J3Q/CGHW2split.jpg
+      // cout<<"Toogle split!"<<endl;
+      if (e0->isBoundary() || e0->halfedge()->twin()->isBoundary())
+         {
+            cerr<<"It\'s on the boundary! Cannot splip!"<<endl;
+            return verticesEnd();
+         }
+
+      HalfedgeIter h = e0->halfedge();
+      HalfedgeIter hTwin = h->twin();
+      VertexIter hRoot = h->vertex();
+      VertexIter hTwinRoot = hTwin->vertex();
+      HalfedgeIter hNext = h->next();
+      HalfedgeIter hNNext = hNext->next();
+      HalfedgeIter hTwinNext = hTwin->next();
+      HalfedgeIter hTwinNNext = hTwinNext->next();
+      FaceIter hFace = h->face();
+      FaceIter hTwinFace = hTwin->face();
+
+      // new vertex
+      Vector3D midPos = (hRoot->position + hTwinRoot->position) / 2;
+      // cout<<"new vertex"<<midPos<<endl;
+      VertexIter midPoint = newVertex();
+      midPoint->position = midPos;
+
+      // new halfedges
+      // cout<<"new halfedges"<<endl;
+      HalfedgeIter h1 = newHalfedge();
+      HalfedgeIter h2 = newHalfedge();
+      HalfedgeIter h11 = newHalfedge();
+      HalfedgeIter h21 = newHalfedge();
+      HalfedgeIter hTwin1 = newHalfedge();
+      HalfedgeIter hTwin2 = newHalfedge();
+      HalfedgeIter hTwin11 = newHalfedge();
+      HalfedgeIter hTwin21 = newHalfedge();
+
+      h1->twin() = hTwin1;
+      hTwin1->twin() = h1;
+      h2->twin() = hTwin2;
+      hTwin2->twin() = h2;
+      h11->twin() = h21;
+      h21->twin() = h11;
+      hTwin11->twin() = hTwin21;
+      hTwin21->twin() = hTwin11;
+
+      h1->next() = h11;
+      h11->next() = hNNext;
+      hNNext->next() = h1;
+      h2->next() = hNext;
+      hNext->next() = h21;
+      h21->next() = h2;
+      hTwin1->next() = hTwinNext;
+      hTwinNext->next() = hTwin11;
+      hTwin11->next() = hTwin1;
+      hTwin2->next() = hTwin21;
+      hTwin21->next() = hTwinNNext;
+      hTwinNNext->next() = hTwin2;
+
+      h1->vertex() = hRoot;
+      h11->vertex() = midPoint;
+      h2->vertex() = midPoint;
+      h21->vertex() = hNNext->vertex();
+      hTwin1->vertex() = midPoint;
+      hTwin11->vertex() = hTwinNNext->vertex();
+      hTwin2->vertex() = hTwinRoot;
+      hTwin21->vertex() = midPoint;
+
+      midPoint->halfedge() = h11;
+      hRoot->halfedge() = hTwinNext;
+      hTwinRoot->halfedge() = hNext;
+
+      // new edges
+      // cout<<"new edges"<<endl;
+      EdgeIter e1 = newEdge();
+      EdgeIter e2 = newEdge();
+      EdgeIter e3 = newEdge();
+      EdgeIter e4 = newEdge();
+
+      e1->halfedge() = h1;
+      e2->halfedge() = h2;
+      e3->halfedge() = h11;
+      e4->halfedge() = hTwin11;
+
+      h1->edge() = e1;
+      hTwin1->edge() = e1;
+      h2->edge() = e2;
+      hTwin2->edge() = e2;
+      h11->edge() = e3;
+      h21->edge() = e3;
+      hTwin11->edge() = e4;
+      hTwin21->edge() = e4;
+
+      // new faces
+      // cout<<"new faces"<<endl;
+      FaceIter hFace1 = newFace();
+      FaceIter hFace2 = newFace();
+      FaceIter hTwinFace1 = newFace();
+      FaceIter hTwinFace2 = newFace();
+
+      hFace1->halfedge() = hNNext;
+      hFace2->halfedge() = hNext;
+      hTwinFace1->halfedge() = hTwinNext;
+      hTwinFace2->halfedge() = hTwinNNext;
+
+      h1->face() = hFace1;
+      hTwin1->face() = hTwinFace1;
+      h2->face() = hFace2;
+      hTwin2->face() = hTwinFace2;
+      h11->face() = hFace1;
+      h21->face() = hFace2;
+      hTwin11->face() = hTwinFace1;
+      hTwin21->face() = hTwinFace2;
+      hNNext->face() = hFace1;
+      hNext->face() = hFace2;
+      hTwinNext->face() = hTwinFace1;
+      hTwinNNext->face() = hTwinFace2;
+
+      deleteHalfedge(h);
+      deleteHalfedge(hTwin);
+      deleteEdge(e0);
+      deleteFace(hFace);
+      deleteFace(hTwinFace);
+
+      // cout<<"Return split!"<<endl;
+      return VertexIter(midPoint);
+   }
+
+//====================================================== collapseEdge ================================================
+   VertexIter HalfedgeMesh::collapseEdge( EdgeIter e )
+   {
+      // TODO This method should collapse the given edge and return an iterator to the new vertex created by the collapse.
+      // Sketch of the flow: http://cl.ly/image/42063s3W1U3W/CGHW2collapse.png
+   // cout<<">>>>> Toogle collapse!"<<endl;
+      if (e->isBoundary() || e->halfedge()->twin()->isBoundary())
+         {
+            cerr<<"It\'s on the boundary! Cannot collapse!"<<endl;
+            return verticesEnd();
+         }
+
+      HalfedgeIter h = e->halfedge();
+      HalfedgeIter hT = h->twin();
+      VertexIter b = h->vertex();
+      VertexIter c = hT->vertex();
+      HalfedgeIter hN = h->next();
+      HalfedgeIter hNN = hN->next();
+      HalfedgeIter hTN = hT->next();
+      HalfedgeIter hTNN = hTN->next();
+      FaceIter hFace = h->face();
+      FaceIter hTwinFace = hT->face();
+      EdgeIter e1 = hNN->edge();
+      EdgeIter e2 = hTN->edge();
+
+      HalfedgeIter hNT = hN->twin();
+      HalfedgeIter hTNNT = hTNN->twin();
+      HalfedgeIter hNNT = hNN->twin();
+      HalfedgeIter hTNT = hTN->twin();
+
+      VertexIter a = hNT->vertex();
+      VertexIter d = hTNT->vertex();
+      if (a->degree() == 3 || d->degree() == 3)
+         {
+            // cerr<<"Cannot collapse to avoid creating vertex whose degree is less than 3! "<<endl;
+            // see http://cl.ly/image/450L3a3X3U3c/cannotCollapse.png
+            return verticesEnd();
+         }
+
+      HalfedgeIter Hb = hTNT->next();
+      VertexIter bNeighborVertex;
+      while (Hb != hNNT)
+         {
+            bNeighborVertex = Hb->twin()->vertex();
+            HalfedgeIter Hc = hNT->next();
+            VertexIter cNeighborVertex;
+            while (Hc != hTNNT)
+               {
+                  cNeighborVertex = Hc->twin()->vertex();
+                  if (bNeighborVertex == cNeighborVertex)
+                  {
+                     // cerr<<"Cannot collapse to avoid duplicate edges! "<<endl;
+                     // see http://cl.ly/image/1Q0M423V0F1d/cannotCollapse2.jpg
+                     return verticesEnd();
+                  }
+                  Hc = Hc->twin()->next();
+               }
+            Hb = Hb->twin()->next();
+         }
+
+      c->position = (b->position + c->position)/2;
+      HalfedgeIter H = hTNT->next();
+      while (H != hNNT)
+         {
+            H->vertex() = c;
+            H = H->twin()->next();
+         }
+
+      // reallocate vertices
+      a->halfedge() = hNT;
+      c->halfedge() = hTNNT;
+      d->halfedge() = hTNNT->next();
+   // cout<<"     >>>>> reallocate vertices!"<<endl;
+
+      // reallocate edges
+      hNT->edge()->halfedge() = hNT;
+      hTNNT->edge()->halfedge() = hTNNT;
+   // cout<<"     >>>>> reallocate edges!"<<endl;
+
+      // reallocate halfedges
+      hNNT->twin() = hNT;
+      hNNT->edge() = hNT->edge();
+      hNNT->vertex() = c;
+      hTNT->twin() = hTNNT;
+      hTNT->edge() = hTNNT->edge();
+      hNT->twin() = hNNT;
+      hTNNT->twin() = hTNT;
+   // cout<<"     >>>>> reallocate halfedges!"<<endl;
+
+      // delete elements
+      deleteHalfedge(hN);
+      deleteHalfedge(hNN);
+      deleteHalfedge(hT);
+      deleteHalfedge(hTN);
+      deleteHalfedge(hTNN);
+      deleteVertex(b);
+      deleteEdge(e1);
+      deleteEdge(e2);
+      deleteEdge(e);
+      deleteFace(hFace);
+      deleteFace(hTwinFace);
+
+      return VertexIter(c);
+   }
+
+//====================================================== flipEdge ================================================
+   EdgeIter HalfedgeMesh::flipEdge( EdgeIter e0 )
+   {
+      // TODO This method should flip the given edge and return an iterator to the flipped edge.
+         // Sketch of the flow: http://cl.ly/image/0Z3c1j432s31/CGHW2flip.png
+      // cout<<"Toogle flip!"<<endl;
+      if (e0->isBoundary() || e0->halfedge()->twin()->isBoundary())
+         {
+            cerr<<"It\'s on the boundary! Cannot flip!"<<endl;
+            return edgesEnd();
+         }
+
+      HalfedgeIter h = e0->halfedge();
+      HalfedgeIter hTwin = h->twin();
+      VertexIter hRoot = h->vertex();
+      VertexIter hTwinRoot = hTwin->vertex();
+      VertexIter a = h->next()->next()->vertex();
+      VertexIter b  = hTwin->next()->next()->vertex();
+      VertexIter bPrime = h->next()->next()->twin()->next()->next()->vertex();
+      if (bPrime == b)
+      {
+            cerr<<"Cannot flip to avoid duplicate edges!"<<endl;
+            // see http://cl.ly/image/312p3e0y2c2H/cannotFlip.png
+            return edgesEnd();
+      }
+
+      if (hRoot->degree() == 3 || hTwinRoot->degree() ==3)
+         {
+            cerr<<"Vertex degree == 3! Cannot flip!"<<endl;
+            return edgesEnd();
+         }
+      HalfedgeIter hNext = h->next();
+      HalfedgeIter hNNext = hNext->next();
+      HalfedgeIter hTwinNext = hTwin->next();
+      HalfedgeIter hTwinNNext = hTwinNext->next();
+
+      FaceIter hFace = h->face();
+      FaceIter hTwinFace = hTwin->face();
+
+      hRoot->halfedge() = hTwinNext; //1
+      hTwinRoot->halfedge() = hNext; //2
+
+
+      hNNext->next() = hTwinNext; //3
+      hTwinNNext->next() = hNext; //3.5
+
+      hTwinNext->face() = hFace; //4
+      hNext->face() = hTwinFace; //4.5
+
+      hFace->halfedge() = hNNext; //7
+      hTwinFace->halfedge() = hTwinNNext; //8
+
+      h->next() = hNNext; //9
+      hTwin->next() = hTwinNNext; //9.5
+      h->vertex() = hTwinNNext->vertex(); //10
+      hTwin->vertex() = hNNext->vertex(); //10.5
+      hTwinNext->next() = h; //12
+      hNext->next() = hTwin; //14
+
+      return EdgeIter(e0);
+   }
+
+//====================================================== unsample ================================================
+   void MeshResampler::upsample( HalfedgeMesh& mesh )
+   // This routine should increase the number of triangles in the mesh using Loop subdivision.
+   {
+      cout<<"================Toogle upsample!================"<<endl;
+      // Each vertex and edge of the original surface can be associated with a vertex in the new (subdivided) surface.
+      // Therefore, our strategy for computing the subdivided vertex locations is to *first* compute the new positions
+      // using the connectity of the original (coarse) mesh; navigating this mesh will be much easier than navigating
+      // the new subdivided (fine) mesh, which has more elements to traverse.  We will then assign vertex positions in
+      // the new mesh based on the values we computed for the original mesh.
+
+
+      // TODO Compute new positions for all the vertices in the input mesh, using the Loop subdivision rule,
+      // TODO and store them in Vertex::newPosition. At this point, we also want to mark each vertex as being
+      // TODO a vertex of the original mesh.
+         //// --------STEP 1: MARK: Mark all vertices as belonging to the original mesh by setting Vertex::isNew to false for all vertices in the mesh.
+         //// --------STEP 2: UPDATE VERTICES NEWPOS: and Compute updated positions for all vertices in the original mesh using the vertex subdivision rule, and store them in Vertex::newPosition.
+            // iterate over all vertices in the mesh
+      for( VertexIter v = mesh.verticesBegin(); v != mesh.verticesEnd(); v++ )
+      {
+         v->isNew = false;
+         int n = v->degree();
+         float u = 0;
+         if (n == 3)
+            u = 3.0 / 16.0;
+         else
+            u = 3.0 / (8.0 * n);
+         v->newPosition = v->position * (1 - n * u);
+         HalfedgeIter h = v->halfedge(); // get one of the outgoing halfedges of the vertex
+         do
+         {
+            HalfedgeIter h_twin = h->twin(); // get the vertex of the current halfedge
+            VertexCIter neighbor = h_twin->vertex(); // vertex is 'source' of the half edge.
+                                              // so h->vertex() is v,
+                                              // whereas h_twin->vertex() is the neighbor vertex.
+
+            v->newPosition  = v->newPosition + neighbor->position * u; // add the vertex position
+
+            h = h_twin->next(); // move to the next outgoing halfedge of the vertex.
+         }
+         while( h != v->halfedge() ); // keep going until we're back at the beginning
+         // v->position = v->newPosition;
+         // cout<<v->newPosition<<endl;
+      }
+      // cout<<"Finish upsample 1 & 2: Finish setting origional vertices false && calculating new pos for them!"<<endl;
+
+
+
+      // TODO Next, compute the updated vertex positions associated with edges, and store it in Edge::newPosition.
+         //// --------STEP 3: UPDATE NEW MIDPOINTS NEWPOS:
+      for( EdgeIter e = mesh.edgesBegin(); e != mesh.edgesEnd(); e++ )
+      {
+         e->isNew = false;
+         HalfedgeIter h = e->halfedge();
+         VertexIter a = h->next()->vertex();
+         VertexIter b = h->next()->next()->vertex();
+         VertexIter c = h->vertex();
+         VertexIter d = h->twin()->next()->next()->vertex();
+         e->newPosition = e->newPosition + a->position * 3.f / 8.f + b->position * 1.f / 8.f + c->position * 3.f / 8.f + d->position * 1.f / 8.f;
+      }
+      // cout<<"Finish upsample 3: Finish calculating new pos for midpoints!"<<endl;
+
+
+      // TODO Next, we're going to split every edge in the mesh, in any order.  For future
+      // TODO reference, we're also going to store some information about which subdivided
+      // TODO edges come from splitting an edge in the original mesh, and which edges are new,
+      // TODO by setting the flat Edge::isNew.  Note that in this loop, we only want to iterate
+      // TODO over edges of the original mesh---otherwise, we'll end up splitting edges that we
+      // TODO just split (and the loop will never end!)
+         //// --------STEP 4: SPLIT EDGES:
+            // iterate over all edges in the mesh
+      EdgeIter e = mesh.edgesBegin();
+      while(e != mesh.edgesEnd())
+      {
+         // get the next edge NOW!
+         EdgeIter nextEdge = e;
+         nextEdge++;
+
+         // now, even if splitting the edge deletes it...
+         VertexIter v1 = e->halfedge()->vertex();
+         VertexIter v2 = e->halfedge()->twin()->vertex();
+         if( e->isNew == false && v1->isNew == false && v2->isNew == false)
+         {
+            Vector3D posOmid = e->newPosition;
+            VertexIter midPoint = mesh.splitEdge( e );
+            midPoint->isNew = true;
+            midPoint->position = posOmid;
+            HalfedgeIter h1 = midPoint->halfedge()->twin();
+            HalfedgeIter h11 = h1->next();
+            HalfedgeIter h2 = h11->twin()->next();
+            HalfedgeIter hTwin11 = h2->twin()->next()->twin();
+            EdgeIter e1 = h1->edge();
+            e1->isNew = true;
+            EdgeIter e3 = h11->edge();
+            e3->isNew = false;
+            EdgeIter e2 = h2->edge();
+            e2->isNew = true;
+            EdgeIter e4 = hTwin11->edge();
+            e4->isNew = false;
+         }
+
+         // ...we still have a valid reference to the next edge.
+         e = nextEdge;
+      }
+
+
+      // TODO Now flip any new edge that connects an old and new vertex.
+         //// --------STEP 5: FLIP EDGES:
+            // iterate over all edges in the mesh
+      for( EdgeIter e1 = mesh.edgesBegin(); e1 != mesh.edgesEnd(); e1++ )
+      {
+         VertexIter v1 = e1->halfedge()->vertex();
+         VertexIter v2 = e1->halfedge()->twin()->vertex();
+         if( e1->isNew == true && ((v1->isNew == false && v2->isNew == true) ||
+          (v1->isNew == true && v2->isNew == false)))
+            EdgeIter eo = mesh.flipEdge( e1 );
+      }
+
+
+      // TODO Finally, copy the new vertex positions into final Vertex::position.
+         //// --------STEP 6: COPY BACK POS FOR OLD VERTICES:
+      for( VertexIter v = mesh.verticesBegin(); v != mesh.verticesEnd(); v++ )
+      {
+         if (v->isNew == false)
+         {
+            v->position = v->newPosition;
+         }
+      }
+
+      cout<<"================Leave upsample!================"<<endl;
+   }
+
+//====================================================== TASK 5 - 1 ================================================
+
+   // Given an edge, the constructor for EdgeRecord finds the
+   // optimal point associated with the edge's current quadric,
+   // and assigns this edge a cost based on how much quadric
+   // error is observed at this optimal point.
+   EdgeRecord::EdgeRecord( EdgeIter& _edge )
+   : edge( _edge )
+   {
+   // TODO Compute the combined quadric from the edge endpoints.
+      VertexIter v1 = _edge->halfedge()->vertex();
+      VertexIter v2 = _edge->halfedge()->twin()->vertex();
+      Matrix4x4 Kquadric;
+      Kquadric = v1->quadric + v2->quadric;
+
+   // TODO Build the 3x3 linear system whose solution minimizes
+   // the quadric error associated with these two endpoints.
+      Matrix3x3 A; // computed by accumulating quadrics and then extacting the upper-left 3x3 block
+      for (int i=0; i<3; i++)
+         for (int j=0; j<3; j++)
+            A(i,j) = Kquadric(i,j);
+      Vector3D b;  // computed by extracting minus the upper-right 3x1 column from the same matrix
+      b.x = Kquadric(0,3) * (-1);
+      b.y = Kquadric(1,3) * (-1);
+      b.z = Kquadric(2,3) * (-1);
+
+   // TODO Use this system to solve for the optimal position, and
+   // TODO store it in EdgeRecord::optimalPoint.
+      Vector3D x3D = A.inv() * b; // solve Ax = b for x, by hitting both sides with the inverse of A
+      this->optimalPoint = x3D;
+
+   // TODO Also store the cost associated with collapsing this edge
+   // TODO in EdgeRecord::Cost.
+      Vector4D x4D;
+      x4D.x = x3D.x;
+      x4D.y = x3D.y;
+      x4D.z = x3D.z;
+      x4D.w = 1;
+      this->score = dot(x4D, Kquadric * x4D);
+   }
+
+//====================================================== TASK 5 - 2 : downsample ================================================
+   void MeshResampler::downsample( HalfedgeMesh& mesh )
+   {
+   cout<<"================Toggle downsample!================"<<endl;
+   int totalFaces = mesh.nFaces();
+
+      // TODO Compute initial quadrics for each face by simply writing the plane
+      // equation for the face in homogeneous coordinates.  These quadrics should
+      // be stored in Face::quadric
+         for( FaceIter f = mesh.facesBegin(); f != mesh.facesEnd(); f++ )
+         {
+           Vector3D N = f->normal();
+           Vector3D p = f->halfedge()->vertex()->position;
+           double d = - dot(N, p);
+           Vector4D v(N.x, N.y, N.z, d);
+           f->quadric = outer(v, v);
+         }
+      // cout<<"completed downsample - 1"<<endl;
+
+
+
+      // TODO Compute an initial quadric for each vertex as the sum of the quadrics
+      // associated with the incident faces, storing it in Vertex::quadric
+         for( VertexIter v = mesh.verticesBegin(); v != mesh.verticesEnd(); v++ )
+         {
+            Matrix4x4 Kquadric;
+            Kquadric.zero(0);
+            HalfedgeIter h = v->halfedge(); // get one of the outgoing halfedges of the vertex
+            do
+            {
+               if (h->face()->isBoundary() == false)
+               {
+                  Matrix4x4 K = h->face()->quadric;
+                  Kquadric = Kquadric + K;
+               }
+               HalfedgeIter h_twin = h->twin(); // get the vertex of the current halfedge
+               h = h_twin->next(); // move to the next outgoing halfedge of the vertex.
+            }
+            while( h != v->halfedge() ); // keep going until we're back at the beginning
+            v->quadric = Kquadric;
+         }
+      // cout<<"completed downsample - 2"<<endl;
+
+
+
+
+      // TODO Build a priority queue of edges according to their quadric error cost,
+      // TODO i.e., by building an EdgeRecord for each edge and sticking it in the queue.
+         MutablePriorityQueue <EdgeRecord> queue;
+         for( EdgeIter e = mesh.edgesBegin(); e != mesh.edgesEnd(); e++ )
+         {
+            EdgeRecord myRecord(e);
+            queue.insert(myRecord);
+         }
+      // cout<<"completed downsample - 3"<<endl;
+
+
+
+      EdgeRecord bestEdgeRecord;
+      EdgeIter bestEdge;
+
+   while (/*queue.queue.empty() == false* &&*/ mesh.nFaces() >= totalFaces / 4)
+      {
+      // TODO Until we reach the target edge budget, collapse the best edge.  Remember
+      // TODO to remove from the queue any edge that touches the collapsing edge BEFORE
+      // TODO it gets collapsed, and add back into the queue any edge touching the collapsed
+      // TODO vertex AFTER it's been collapsed.  Also remember to assign a quadric to the
+      // TODO collapsed vertex, and to pop the collapsed edge off the top of the queue.
+         // ============== 4.1. Get the cheapest edge from the queue.
+            bestEdgeRecord = queue.top();
+            bestEdge = bestEdgeRecord.edge;
+            queue.pop();
+
+         // cout<<"completed downsample - 4.1"<<endl;
+
+         // ============== 4.2. Compute the new quadric by summing the quadrics at its two endpoints.
+            VertexIter v1 = bestEdge->halfedge()->vertex();
+            VertexIter v2 = bestEdge->halfedge()->twin()->vertex();
+            Matrix4x4 Kquadric = v1->quadric + v2->quadric;
+         // cout<<"completed downsample - 4.2 "<<endl;
+
+         // ============== 4.3. Remove any edge touching either of its endpoints from the queue.
+            vector<EdgeRecord> edgesTouchingTheEdge;
+            HalfedgeIter h = v1->halfedge(); // get one of the outgoing halfedges of the vertex
+            do
+            {
+               EdgeIter edgeToRemove = h->edge();
+               edgesTouchingTheEdge.push_back(edgeToRemove);
+               HalfedgeIter h_twin = h->twin(); // get the vertex of the current halfedge
+               h = h_twin->next(); // move to the next outgoing halfedge of the vertex.
+            }
+            while( h != v1->halfedge() ); // keep going until we're back at the beginning
+
+            h = v2->halfedge(); // get one of the outgoing halfedges of the vertex
+            do
+            {
+               EdgeIter edgeToRemove = h->edge();
+               edgesTouchingTheEdge.push_back(edgeToRemove);
+               HalfedgeIter h_twin = h->twin(); // get the vertex of the current halfedge
+               h = h_twin->next(); // move to the next outgoing halfedge of the vertex.
+            }
+            while( h != v2->halfedge() ); // keep going until we're back at the beginning
+         // cout<<"completed downsample - 4.3"<<endl;
+
+         // ============== 4.4. 【Collapse】 the edge.
+            VertexIter newVertexAfterCollapse;
+            newVertexAfterCollapse = mesh.collapseEdge(bestEdge);
+            if (newVertexAfterCollapse != mesh.verticesEnd())
+            {
+               // cout<<"completed downsample - 4.4"<<endl;
+               for(int i=0; i<edgesTouchingTheEdge.size(); i++)
+                  queue.remove(edgesTouchingTheEdge[i]);
+
+               // ============== 4.5. Set the quadric of the new vertex to the quadric computed in Step 2.
+                  newVertexAfterCollapse->quadric = Kquadric;
+               // cout<<"completed downsample - 4.5"<<endl;
+
+               // ============== 4.6. Insert any edge touching the new vertex into the queue, creating new edge records for each of them.
+                  h = newVertexAfterCollapse->halfedge(); // get one of the outgoing halfedges of the vertex
+                  do
+                  {
+                     EdgeIter edgeTouchingTheVertex = h->edge();
+                     EdgeRecord recordForEdgeTouchingTheVertex(edgeTouchingTheVertex);
+                     queue.insert(recordForEdgeTouchingTheVertex);
+                     HalfedgeIter h_twin = h->twin(); // get the vertex of the current halfedge
+                     h = h_twin->next(); // move to the next outgoing halfedge of the vertex.
+                  }
+                  while( h != newVertexAfterCollapse->halfedge() ); // keep going until we're back at the beginning
+               // cout<<"completed downsample - 4.6"<<endl;
+
+               // ============== 4.7. Remove the cheapest edge from the queue by calling pop().
+               // cout<<"completed downsample - 4.7"<<endl;
+            }
+
+            // cout<<"countLeft "<<mesh.nFaces()<<" / nFaces: "<<totalFaces<<" queue.size(): "<<queue.queue.size()<<endl;
+
+
+      }
+      cout<<"================Leave downsample!================"<<endl;
+   }
+
+//====================================================== TASK 6 ================================================
+
+   void Vertex::computeCentroid( void )
+   {
+      // TODO Compute the average position of all neighbors of this vertex, and
+      // TODO store it in Vertex::centroid.  This value will be used for resampling.
+      HalfedgeIter h = this->halfedge(); // get one of the outgoing halfedges of the vertex
+      Vector3D sum;
+      int count = 0;
+      do
+      {
+         VertexIter v = h->twin()->vertex();
+         sum += v->position;
+         count++;
+         h = h->twin()->next(); // move to the next outgoing halfedge of the vertex.
+      }
+      while( h != this->halfedge() ); // keep going until we're back at the beginning
+      this->centroid = sum / double(count);
+   }
+
+   Vector3D Vertex::normal( void ) const
+   // TODO Returns an approximate unit normal at this vertex, computed by
+   // TODO taking the area-weighted average of the normals of neighboring
+   // TODO triangles, then normalizing.
+   {
+      HalfedgeCIter h = halfedge(); // get one of the outgoing halfedges of the vertex
+      Vector3D sum;
+      do
+      {
+         VertexCIter v1 = h->twin()->vertex();
+         VertexCIter v2 = h->next()->next()->vertex();
+         Vector3D l1 = v1->position - this->position;
+         Vector3D l2 = v2->position - this->position;
+         sum += cross(l1, l2).norm() * h->face()->normal();
+         h = h->twin()->next(); // move to the next outgoing halfedge of the vertex.
+      }
+      while( h != halfedge() ); // keep going until we're back at the beginning
+      // TODO Compute and return the area-weighted unit normal.
+			// return Vector3D();
+      return sum.unit();
+	 }
+
+   void MeshResampler::resample( HalfedgeMesh& mesh )
+   {
+      cout<<"================Toggle resample!================"<<endl;
+      // TODO Compute the mean edge length.
+      int countEdge = 0;
+      double edgeLengthSum = 0;
+        for(EdgeIter e = mesh.edgesBegin(); e != mesh.edgesEnd(); e++)
+        {
+         if (e->isBoundary() == false)
+         {
+            edgeLengthSum += e->length();
+            countEdge++;
+         }
+        }
+        edgeLengthSum = edgeLengthSum / countEdge * 0.95;
+        double edgeLengthMax = edgeLengthSum / 3 * 4;
+        double edgeLengthMin = edgeLengthSum / 5 * 4;
+
+      // TODO Repeat the four main steps for 5 or 6 iterations
+        int iterNum = 5;
+        for (int i=0; i<iterNum; i++)
+        {
+         // TODO Split edges much longer than the target length (being careful about how the loop is written!)
+            EdgeIter e = mesh.edgesBegin();
+            while(e != mesh.edgesEnd())
+            {
+               // get the next edge NOW!
+               EdgeIter nextEdge = e;
+               nextEdge++;
+               VertexIter uselessV;
+               if (e->length() > edgeLengthMax)
+                  uselessV = mesh.splitEdge(e);
+               // ...we still have a valid reference to the next edge.
+               e = nextEdge;
+            }
+
+         // TODO Collapse edges much shorter than the target length.  Here we need to be EXTRA careful about
+         // TODO advancing the loop, because many edges may have been destroyed by a collapse (which ones?)
+            // vector<EdgeIter> edgeBombed;
+            e = mesh.edgesBegin();
+            while(e != mesh.edgesEnd())
+            {
+               if (e->length() < edgeLengthMin)
+               {
+                  EdgeIter e1 = e->halfedge()->next()->next()->edge();
+                  EdgeIter e2 = e->halfedge()->twin()->next()->edge();
+                  // get the next edge NOW!
+                  EdgeIter nextEdge = e;
+                  nextEdge++;
+                  if (nextEdge == e1 || nextEdge == e2)
+                     nextEdge ++;
+                  if (nextEdge == e1 || nextEdge == e2)
+                     nextEdge ++;
+                  VertexIter uselessV;
+                     uselessV = mesh.collapseEdge(e);
+                  // ...we still have a valid reference to the next edge.
+                  e = nextEdge;
+               }
+               else
+                  e++;
+
+            }
+
+         // TODO Now flip each edge if it improves vertex degree
+            e = mesh.edgesBegin();
+            while(e != mesh.edgesEnd())
+            {
+               // EdgeIter nextEdge = e;
+               // nextEdge++;
+               int a1Degree = e->halfedge()->vertex()->degree();
+               int a2Degree = e->halfedge()->twin()->vertex()->degree();
+               int b1Degree = e->halfedge()->next()->next()->vertex()->degree();
+               int b2Degree = e->halfedge()->twin()->next()->next()->vertex()->degree();
+               int deviation = abs(a1Degree-6) + abs(a2Degree-6) + abs(b1Degree-6) + abs(b2Degree-6);
+               int deviationAfterFlip = abs(a1Degree-1-6) + abs(a2Degree-1-6) + abs(b1Degree+1-6) + abs(b2Degree+1-6);
+               if (deviationAfterFlip < deviation)
+                  EdgeIter uselessE = mesh.flipEdge(e);
+
+               // ...we still have a valid reference to the next edge.
+               // e = nextEdge;
+               e++;
+            }
+
+
+         // TODO Finally, apply some tangential smoothing to the vertex positions
+            int smoothNum = 20;
+            for (int i=0; i<smoothNum; i++)
+            {
+               for(VertexIter v = mesh.verticesBegin(); v != mesh.verticesEnd(); v++)
+               v->computeCentroid();
+
+               for(VertexIter v = mesh.verticesBegin(); v != mesh.verticesEnd(); v++)
+               {
+                  Vector3D c = v->centroid;
+                  Vector3D V = c - v->position;
+                  Vector3D N = v->normal();
+                  V = V - dot(N, V) * N;
+                  V = V / 5.0;
+                  v->position += V;
+               }
+            }
+        }
+        cout<<"================Leave resample!================"<<endl;
+
+   }
+}
