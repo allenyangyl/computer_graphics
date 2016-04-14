@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<svg version="1.1" id="Layer_1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" x="0px" y="0px"
+	 width="300px" height="300px" viewBox="0 0 300 300" enable-background="new 0 0 300 300" xml:space="preserve">
+<polygon fill="#BF00FF" points="75,100 150,275 225,100 150,175 "/>
+<line fill="none" stroke="#000000" stroke-width="0.8" stroke-miterlimit="10" x1="150" y1="25" x2="75" y2="100"/>
+<line fill="none" stroke="#000000" stroke-width="0.8" stroke-miterlimit="10" x1="150" y1="175" x2="75" y2="100"/>
+<line fill="none" stroke="#000000" stroke-width="0.8" stroke-miterlimit="10" x1="150" y1="25" x2="225" y2="100"/>
+<line fill="none" stroke="#000000" stroke-width="0.8" stroke-miterlimit="10" x1="150" y1="175" x2="225" y2="100"/>
+<line fill="none" stroke="#000000" stroke-width="0.8" stroke-miterlimit="10" x1="150" y1="275" x2="75" y2="100"/>
+<line fill="none" stroke="#000000" stroke-width="0.8" stroke-miterlimit="10" x1="150" y1="275" x2="225" y2="100"/>
+</svg>
